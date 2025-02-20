@@ -9,7 +9,6 @@ from bs4 import BeautifulSoup
 from PIL import Image
 from pdf2image import convert_from_bytes
 from dotenv import load_dotenv
-import pdfkit
 import tiktoken
 import pytesseract  # For OCR
 
