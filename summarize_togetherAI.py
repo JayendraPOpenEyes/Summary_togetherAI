@@ -188,12 +188,12 @@ class TextProcessor:
     def generate_json_with_prompt(self, html, base_name):
         soup = BeautifulSoup(html, 'html.parser')
         text = soup.get_text(separator=' ').strip()
-        # --- Truncate the text to avoid overwhelming the model ---
+        # Truncate the text to avoid overwhelming the model
         truncated_text = self.truncate_text(text, max_tokens=1500)
         prompt = (
-            "Convert the following text into a structured JSON format with keys 'h1' and 'p'.\n"
-            "Do not summarize or omit any details; preserve the entire text structure.\n"
-            "Return only the JSON enclosed in triple backticks, with no extra commentary.\n\n"
+            "Convert the following text into a structured JSON format where each heading is captured as a key 'h1' and each paragraph as a key 'p'.\n"
+            "Ensure that the entire output is a valid JSON object enclosed in triple backticks (```).\n"
+            "Do not include any additional text or commentary; output only the JSON block.\n\n"
             + truncated_text
         )
         try:
@@ -212,8 +212,8 @@ class TextProcessor:
             logging.info(f"Raw TogetherAI response: {response_json}")
             response_text = response_json["choices"][0]["text"]
 
-            # --- Look for a JSON block enclosed by triple backticks ---
-            json_match = re.search(r"```json\s*(\{.*\})\s*```", response_text, re.DOTALL)
+            # Use regex that allows for an optional language specifier (e.g., "json") inside the triple backticks.
+            json_match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", response_text, re.DOTALL)
             if json_match:
                 json_text = json_match.group(1)
                 try:
@@ -254,24 +254,23 @@ class TextProcessor:
     def generate_summaries_with_togetherai(self, combined_text):
         combined_text = self.truncate_text(combined_text, max_tokens=4000)
         prompt = f"""
-Generate the following summaries for the text below. Please adhere strictly to these instructions and output exactly the text within the specified markers with no extra commentary.
+Please generate three types of summaries for the text below:
 
-For Abstractive Summary:
-- Provide a concise summary in one paragraph (maximum 8 sentences) covering the key points.
+1. [Abstractive]:
+   - Write a concise summary in one paragraph (up to 8 sentences) covering the main purpose, key definitions, sponsors, and overall impact of the legislation.
+   
+2. [Extractive]:
+   - Provide an extractive summary in at least two well-structured paragraphs that captures the core ideas and important details from the text.
 
-For Extractive Summary:
-- Provide a detailed summary in at least 2 paragraphs capturing the main ideas.
+3. [Highlights]:
+   - List 15 to 20 bullet points grouped under four headings: "Overview", "Key Definitions", "Legislative Intent", and "Implementation & Impact".
+   - Under each heading, include bullet points that highlight the most critical aspects of the text.
 
-For Highlights & Analysis:
-- Provide 15 to 20 bullet points grouped under 4 relevant headings.
-- Each heading should be followed by bullet points containing key details.
+Return only the text within the following markers with no additional commentary:
 
-Use the following markers exactly:
 [Abstractive]
 [Extractive]
 [Highlights]
-
-Return only the text between these markers with no additional commentary.
 
 Text:
 {combined_text}
