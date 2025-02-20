@@ -254,34 +254,24 @@ class TextProcessor:
     def generate_summaries_with_togetherai(self, combined_text):
         combined_text = self.truncate_text(combined_text, max_tokens=4000)
         prompt = f"""
-Generate the following summaries for the text below. Please adhere to these instructions:
+Generate the following summaries for the text below. Please adhere strictly to these instructions and output exactly the text within the specified markers with no extra commentary.
 
 For Abstractive Summary:
-- The summary should be concise and not very long.
-- It should cover all the key points very shortly.
-- Summarize the content in one short paragraph (maximum 8 sentences).
+- Provide a concise summary in one paragraph (maximum 8 sentences) covering the key points.
 
 For Extractive Summary:
-- Generate a minimum of 2 paragraphs if the content is sufficiently long; adjust accordingly if the content is short.
-- Provide a sensible extractive summary capturing the main ideas.
+- Provide a detailed summary in at least 2 paragraphs capturing the main ideas.
 
 For Highlights & Analysis:
-- Produce 15 to 20 bullet points grouped under 4 meaningful headings.
-- Each heading should be relevant to the content and include bullet points with key details.
-- Highlights should be in the form of headings only, followed by bullet points.
+- Provide 15 to 20 bullet points grouped under 4 relevant headings.
+- Each heading should be followed by bullet points containing key details.
 
-Use the following markers exactly for each section:
-
-Abstractive Summary:
+Use the following markers exactly:
 [Abstractive]
-
-Extractive Summary:
 [Extractive]
-
-Highlights & Analysis:
 [Highlights]
 
-Only output the text within these markers without any additional commentary.
+Return only the text between these markers with no additional commentary.
 
 Text:
 {combined_text}
@@ -294,15 +284,17 @@ Text:
             data = {
                 "model": self.model,
                 "prompt": prompt,
-                "max_tokens": 1500,
+                "max_tokens": 2000,
                 "temperature": 0.5
             }
             response = self._post_with_retry("https://api.together.xyz/v1/completions", headers, data)
             response.raise_for_status()
             summaries = response.json()["choices"][0]["text"]
-            abstractive_match = re.search(r"\[Abstractive\](.*?)\[Extractive\]", summaries, re.DOTALL)
-            extractive_match = re.search(r"\[Extractive\](.*?)\[Highlights\]", summaries, re.DOTALL)
-            highlights_match = re.search(r"\[Highlights\](.*)", summaries, re.DOTALL)
+            logging.info(f"Raw TogetherAI response: {summaries}")
+            # Enhanced regex patterns to allow for optional whitespace around markers
+            abstractive_match = re.search(r"\[Abstractive\]\s*(.*?)\s*\[Extractive\]", summaries, re.DOTALL)
+            extractive_match = re.search(r"\[Extractive\]\s*(.*?)\s*\[Highlights\]", summaries, re.DOTALL)
+            highlights_match = re.search(r"\[Highlights\]\s*(.*)", summaries, re.DOTALL)
             return {
                 "extractive": extractive_match.group(1).strip() if extractive_match else "Extractive summary not found.",
                 "abstractive": abstractive_match.group(1).strip() if abstractive_match else "Abstractive summary not found.",
