@@ -188,13 +188,21 @@ class TextProcessor:
     def generate_json_with_prompt(self, html, base_name):
         soup = BeautifulSoup(html, 'html.parser')
         text = soup.get_text(separator=' ').strip()
-        # --- Truncate the text to avoid overwhelming the model ---
+        # Truncate the text to avoid overwhelming the model
         truncated_text = self.truncate_text(text, max_tokens=1500)
-        prompt = (
-            "Convert the following text into a structured JSON format with keys 'h1' and 'p'.\n"
-            "Do not summarize or omit any details; preserve the entire text structure.\n"
-            "Return only the JSON enclosed in triple backticks, with no extra commentary.\n\n"
-            + truncated_text
+        # Revised prompt: force output exactly a JSON object enclosed in triple backticks
+        prompt = (  
+            "Convert the following text into a structured JSON object where each heading is captured as a key 'h1' and each paragraph as a key 'p'.\n"
+        "Your entire output must be exactly one valid JSON object enclosed within triple backticks (```).\n"
+        "Do not include any additional text, commentary, or formatting outside of the triple backticks.\n"
+        "Ensure that the JSON is well-formed. The output format should be:\n"
+        "```json\n"
+        "{\n"
+        "  \"h1\": \"...\",\n"
+        "  \"p\": \"...\"\n"
+        "}\n"
+        "```\n\n"
+        + truncated_text
         )
         try:
             headers = {
@@ -205,15 +213,15 @@ class TextProcessor:
                 "model": self.model,
                 "prompt": prompt,
                 "max_tokens": 2000,
-                "temperature": 0.7
+                "temperature": 0.5
             }
             response = self._post_with_retry("https://api.together.xyz/v1/completions", headers, data)
             response_json = response.json()
             logging.info(f"Raw TogetherAI response: {response_json}")
             response_text = response_json["choices"][0]["text"]
 
-            # --- Look for a JSON block enclosed by triple backticks ---
-            json_match = re.search(r"```json\s*(\{.*\})\s*```", response_text, re.DOTALL)
+            # Try to extract a JSON block enclosed in triple backticks with an optional language specifier.
+            json_match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", response_text, re.DOTALL)
             if json_match:
                 json_text = json_match.group(1)
                 try:
@@ -222,7 +230,7 @@ class TextProcessor:
                     logging.error(f"Error parsing JSON extracted from triple backticks: {e}")
                     return {}
             else:
-                # Fallback: try to extract any JSON object in the text.
+                # Fallback: Attempt to extract any JSON object present in the text.
                 json_match = re.search(r"(\{.*\})", response_text, re.DOTALL)
                 if json_match:
                     try:
@@ -231,7 +239,7 @@ class TextProcessor:
                         logging.error(f"Error parsing fallback JSON block: {e}")
                         return {}
                 else:
-                    logging.error("JSON block not found in the response.")
+                    logging.error("JSON block not found in the response. Full response: " + response_text)
                     return {}
 
             base_folder = self.get_save_directory(base_name)
@@ -243,6 +251,7 @@ class TextProcessor:
         except Exception as e:
             logging.error(f"Error generating JSON with TogetherAI: {e}")
             return {}
+
 
     def truncate_text(self, text, max_tokens=3000):
         encoding = tiktoken.encoding_for_model("gpt-4")  # Use GPT-4 tokenizer as a fallback
