@@ -37,9 +37,13 @@ class TextProcessor:
         self.model = model
 
     def get_save_directory(self, base_name):
+        if not base_name or not base_name.strip():
+            raise ValueError("Cache name must be specified")
         folder_path = os.path.join(SAVE_DIR, base_name)
         os.makedirs(folder_path, exist_ok=True)
         return folder_path
+
+  
 
     def get_base_name_from_link(self, link):
         parts = link.split('/')
@@ -243,7 +247,7 @@ class TextProcessor:
             tokens = tokens[:max_tokens]
         return encoding.decode(tokens)
 
-    def generate_summaries_with_chatgpt(self, combined_text):
+    def generate_summaries_with_togetherai(self, combined_text):
         combined_text = self.truncate_text(combined_text, max_tokens=4000)
         prompt = f"""
 Generate the following summaries for the text below. Please adhere to these instructions:
@@ -256,9 +260,9 @@ For Abstractive Summary:
 For Extractive Summary:
 - Generate a minimum of 2 paragraphs if the content is sufficiently long; adjust accordingly if the content is short.
 - Provide a sensible extractive summary capturing the main ideas.
-
+    
 For Highlights & Analysis:
-- Produce 15 to 20 bullet points grouped under 4 meaningful headings.
+- Produce 10 to 15 bullet points grouped under meaningful headings.
 - Each heading should be relevant to the content and include bullet points with key details.
 - Highlights should be in the form of headings only, followed by bullet points.
 
@@ -316,7 +320,8 @@ Text:
 
     def get_cache_file_path(self, base_name, text_hash):
         folder = self.get_save_directory(base_name)
-        return os.path.join(folder, f"summary_cache_{text_hash}.json")
+         # Instead of using the full hash in the filename,we are using just the base_name
+        return os.path.join(folder, f"{base_name}_cache.json")
 
     def get_cached_summary(self, text, base_name, cache_expiry=3600):
         text_hash = self.get_hash(text)
@@ -353,7 +358,7 @@ Text:
         cached_summary = self.get_cached_summary(clean_text, base_name)
         if cached_summary:
             return cached_summary
-        summaries = self.generate_summaries_with_chatgpt(clean_text)
+        summaries = self.generate_summaries_with_togetherai(clean_text)
         self.process_full_text_to_json(clean_text, base_name)
         # Update cache with new summary
         self.update_cached_summary(clean_text, summaries, base_name)
@@ -406,7 +411,7 @@ def process_input(input_data, model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Fre
         if cached_summary:
             return cached_summary
 
-        summaries = processor.generate_summaries_with_chatgpt(clean_text)
+        summaries = processor.generate_summaries_with_togetherai(clean_text)
         processor.process_full_text_to_json(clean_text, base_name)
         # Update cache with new summary
         processor.update_cached_summary(clean_text, summaries, base_name)
