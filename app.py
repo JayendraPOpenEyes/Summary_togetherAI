@@ -44,9 +44,6 @@ def format_highlights(highlights_text):
     
     return highlights_text
 
-def justify_text(text):
-    """Wrap text in a div that justifies its alignment."""
-    return f"<div style='text-align: justify;'>{text}</div>"
 
 def extract_text_from_pdf(pdf_file):
     """Extract text from a PDF file using PyPDF2 (for fallback purposes)."""
@@ -70,28 +67,23 @@ def main():
     if 'all_summaries' not in st.session_state:
         st.session_state.all_summaries = {}
 
-    # -------- Single URL Processing with realtime feedback --------
+    # Individual URL processing
     url = st.text_input("Enter URL")
     if st.button("Summarize URL"):
         if url:
-            # Create a placeholder for realtime status updates
-            status_placeholder = st.empty()
-            status_placeholder.info("Starting summary generation...")
-            with st.spinner('Generating summary...'):
-                # Call the processing function (this call will block until complete)
+            with st.spinner('Processing...'):
                 result = process_input(url)
-            if isinstance(result, dict) and "error" in result:
-                status_placeholder.warning(f"Failed to process URL: {result['error']}")
-            elif isinstance(result, dict):
-                status_placeholder.success("Summarization complete!")
-                # Store the summaries, formatting each with justified text for display.
-                st.session_state.all_summaries[url] = {
-                    "abstractive": justify_text(result["abstractive"]),
-                    "extractive": justify_text(result["extractive"]),
-                    "highlights": justify_text(format_highlights(result["highlights"]))
-                }
-            else:
-                st.error("An unexpected error occurred.")
+                if isinstance(result, dict) and "error" in result:
+                    st.warning(f"Failed to process URL: {result['error']}")
+                elif isinstance(result, dict):
+                    st.success("Summarization complete!")
+                    st.session_state.all_summaries[url] = {
+                        "abstractive": result["abstractive"],
+                        "extractive": result["extractive"],
+                        "highlights": format_highlights(result["highlights"])
+                    }
+                else:
+                    st.error("An unexpected error occurred.")
         else:
             st.error("Please enter a valid URL.")
 
@@ -104,14 +96,14 @@ def main():
                     st.warning("Could not generate extractive summary")
                 else:
                     st.subheader("Extractive Summary")
-                    st.markdown(summaries["extractive"], unsafe_allow_html=True)
+                    st.markdown(summaries["extractive"])
                 st.subheader("Abstractive Summary")
-                st.markdown(summaries["abstractive"], unsafe_allow_html=True)
+                st.markdown(summaries["abstractive"])
                 st.subheader("Highlights & Analysis")
-                st.markdown(summaries["highlights"], unsafe_allow_html=True)
+                st.markdown(summaries["highlights"])
                 st.write("---")
 
-    # -------- Excel File Processing with progress updates --------
+    # Excel file processing
     uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx", "xls"])
     if uploaded_file is not None:
         if st.session_state.prev_upload != uploaded_file.name:
@@ -127,8 +119,6 @@ def main():
             st.error("File must contain 'BillState' and 'BillTextURL' columns")
         else:
             if st.button("Process Excel File"):
-                progress_bar = st.progress(0)
-                status_placeholder = st.empty()
                 with st.spinner('Processing URLs... This may take several minutes'):
                     total_urls = len(df['BillTextURL'].dropna())
                     processed_count = 0
@@ -136,10 +126,9 @@ def main():
                         url = row['BillTextURL']
                         if pd.notna(url) and df.at[index, 'Extractive Summary'] == '':
                             processed_count += 1
-                            status_msg = f"Processing URL {processed_count}/{total_urls}: {url}"
-                            status_placeholder.info(status_msg)
                             try:
                                 result = process_input(url)
+                                status_msg = f"Processing URL {processed_count}/{total_urls}: {url}"
                                 if isinstance(result, dict) and "error" in result:
                                     st.warning(f"{status_msg} - Can't generate summary")
                                     df.at[index, 'Extractive Summary'] = "Error"
@@ -156,8 +145,7 @@ def main():
                                 df.at[index, 'Extractive Summary'] = "Error"
                                 df.at[index, 'Abstractive Summary'] = "Error"
                                 df.at[index, 'Highlights & Analysis'] = "Error"
-                            # Update the progress bar after each URL is processed
-                            progress_bar.progress(int((processed_count / total_urls) * 100))
+                                continue
                     st.session_state.processed_df = df
                     st.session_state.processing_complete = True
                 st.success("Processing complete! You can now download the file.")
@@ -175,11 +163,11 @@ def main():
                                 st.warning("Could not generate extractive summary")
                             else:
                                 st.subheader("Extractive Summary")
-                                st.markdown(justify_text(extractive_summary), unsafe_allow_html=True)
+                                st.markdown(extractive_summary)
                             st.subheader("Abstractive Summary")
-                            st.markdown(justify_text(abstractive_summary), unsafe_allow_html=True)
+                            st.markdown(abstractive_summary)
                             st.subheader("Highlights & Analysis")
-                            st.markdown(justify_text(format_highlights(highlights)), unsafe_allow_html=True)
+                            st.markdown(highlights)
                             st.write("---")
             if st.session_state.processing_complete and st.session_state.processed_df is not None:
                 output = BytesIO()
@@ -197,27 +185,25 @@ def main():
                     key='download_btn'
                 )
 
-    # -------- PDF File Processing with realtime feedback --------
+    # PDF file processing
     uploaded_pdf = st.file_uploader("Upload PDF File", type=["pdf"])
     if uploaded_pdf is not None:
         st.success("PDF file uploaded successfully!")
         if st.button("Summarize PDF"):
-            status_placeholder = st.empty()
-            status_placeholder.info("Generating summary for the PDF...")
             with st.spinner('Processing PDF...'):
                 # Pass the uploaded file object directly to process_input
                 result = process_input(uploaded_pdf)
-            if isinstance(result, dict) and "error" in result:
-                status_placeholder.warning(f"Failed to process PDF: {result['error']}")
-            elif isinstance(result, dict):
-                status_placeholder.success("Summarization complete!")
-                st.session_state.all_summaries[uploaded_pdf.name] = {
-                    "abstractive": justify_text(result["abstractive"]),
-                    "extractive": justify_text(result["extractive"]),
-                    "highlights": justify_text(format_highlights(result["highlights"]))
-                }
-            else:
-                st.error("An unexpected error occurred.")
+                if isinstance(result, dict) and "error" in result:
+                    st.warning(f"Failed to process PDF: {result['error']}")
+                elif isinstance(result, dict):
+                    st.success("Summarization complete!")
+                    st.session_state.all_summaries[uploaded_pdf.name] = {
+                        "abstractive": result["abstractive"],
+                        "extractive": result["extractive"],
+                        "highlights": format_highlights(result["highlights"])
+                    }
+                else:
+                    st.error("An unexpected error occurred.")
         if uploaded_pdf.name in st.session_state.all_summaries:
             summaries = st.session_state.all_summaries[uploaded_pdf.name]
             with st.expander(f"Summary for {uploaded_pdf.name}", expanded=True):
@@ -225,11 +211,11 @@ def main():
                     st.warning("Could not generate extractive summary")
                 else:
                     st.subheader("Extractive Summary")
-                    st.markdown(summaries["extractive"], unsafe_allow_html=True)
+                    st.markdown(summaries["extractive"])
                 st.subheader("Abstractive Summary")
-                st.markdown(summaries["abstractive"], unsafe_allow_html=True)
+                st.markdown(summaries["abstractive"])
                 st.subheader("Highlights & Analysis")
-                st.markdown(summaries["highlights"], unsafe_allow_html=True)
+                st.markdown(summaries["highlights"])
                 st.write("---")
 
 if __name__ == "__main__":
