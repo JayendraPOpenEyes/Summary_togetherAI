@@ -262,7 +262,7 @@ For Extractive Summary:
 - Provide a sensible extractive summary capturing the main ideas.
     
 For Highlights & Analysis:
-- Produce 10 to 15 bullet points grouped under meaningful headings.
+- Produce 10 to 15 bullet points grouped under 4 meaningful headings.
 - Each heading should be relevant to the content and include bullet points with key details.
 - Highlights should be in the form of headings only, followed by bullet points.
 
