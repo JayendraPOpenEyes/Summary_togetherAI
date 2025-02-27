@@ -263,29 +263,31 @@ class TextProcessor:
             logging.error(f"Error generating summary: {str(e)}")
             return {"summary": f"Error generating summary: {str(e)}"}
 
-    def get_hash(self, text):
-        return hashlib.md5(text.encode('utf-8')).hexdigest()
+    def get_hash(self, text, custom_prompt=None):
+        # Combine text and custom_prompt (if provided) for the hash
+        combined_input = f"{text}{custom_prompt or ''}"
+        return hashlib.md5(combined_input.encode('utf-8')).hexdigest()
 
     def get_cache_file_path(self, base_name, text_hash):
         folder = self.get_save_directory(base_name)
-        return os.path.join(folder, f"{base_name}_cache.json")
+        return os.path.join(folder, f"{base_name}_{text_hash}_cache.json")
 
-    def get_cached_summary(self, text, base_name, cache_expiry=3600):
-        text_hash = self.get_hash(text)
+    def get_cached_summary(self, text, base_name, custom_prompt=None, cache_expiry=3600):
+        text_hash = self.get_hash(text, custom_prompt)
         cache_file = self.get_cache_file_path(base_name, text_hash)
         if os.path.exists(cache_file):
             try:
                 with open(cache_file, 'r') as f:
                     cache = json.load(f)
-                if time.time() - cache.get("timestamp", 0) < cache_expiry:
+                if time.time() - cache.get("timestamp", 0) < cache_expiry and cache.get("text_hash") == text_hash:
                     logging.info("Returning cached summary.")
                     return cache.get("summary")
             except Exception as e:
-                logging.error("Error reading cache: " + str(e))
+                logging.error(f"Error reading cache: {str(e)}")
         return None
 
-    def update_cached_summary(self, text, summary, base_name):
-        text_hash = self.get_hash(text)
+    def update_cached_summary(self, text, summary, base_name, custom_prompt=None):
+        text_hash = self.get_hash(text, custom_prompt)
         cache_file = self.get_cache_file_path(base_name, text_hash)
         cache = {
             "text_hash": text_hash,
@@ -297,16 +299,16 @@ class TextProcessor:
                 json.dump(cache, f)
             logging.info("Cache updated.")
         except Exception as e:
-            logging.error("Error writing cache: " + str(e))
+            logging.error(f"Error writing cache: {str(e)}")
 
-    def process_raw_text(self, text, base_name="raw_text"):
+    def process_raw_text(self, text, base_name="raw_text", custom_prompt=None):
         clean_text = self.preprocess_text(text)
-        cached_summary = self.get_cached_summary(clean_text, base_name)
+        cached_summary = self.get_cached_summary(clean_text, base_name, custom_prompt)
         if cached_summary:
             return cached_summary
-        summary = self.generate_summaries_with_togetherai(clean_text)
+        summary = self.generate_summaries_with_togetherai(clean_text, custom_prompt)
         self.process_full_text_to_json(clean_text, base_name)
-        self.update_cached_summary(clean_text, summary, base_name)
+        self.update_cached_summary(clean_text, summary, base_name, custom_prompt)
         return {"model": self.model, "summary": summary["summary"]}
 
 def process_input(input_data, model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free", custom_prompt=None):
@@ -345,13 +347,13 @@ def process_input(input_data, model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Fre
         else:
             return {"error": "Invalid input type. Expected URL, raw text, or an uploaded file.", "model": model}
 
-        cached_summary = processor.get_cached_summary(clean_text, base_name)
+        cached_summary = processor.get_cached_summary(clean_text, base_name, custom_prompt)
         if cached_summary:
             return cached_summary
 
         summary = processor.generate_summaries_with_togetherai(clean_text, custom_prompt)
         processor.process_full_text_to_json(clean_text, base_name)
-        processor.update_cached_summary(clean_text, summary, base_name)
+        processor.update_cached_summary(clean_text, summary, base_name, custom_prompt)
         return {"model": model, "summary": summary["summary"]}
     except Exception as e:
         logging.error(f"Error processing input: {str(e)}")
